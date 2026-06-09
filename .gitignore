@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Trained model artifacts
+*.pt
+*_tokenizer.json
+
+# Virtual environments
+.venv/
+venv/
