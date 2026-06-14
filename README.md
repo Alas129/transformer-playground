@@ -32,6 +32,11 @@ transformer-playground/
 │   ├── 11_modern_architectures.ipynb # RMSNorm, RoPE, SwiGLU, GQA, FlashAttention
 │   ├── 12_instruction_tuning_and_lora.ipynb  # SFT + LoRA (base model → assistant)
 │   └── 13_preference_alignment.ipynb         # Reward models, RLHF & DPO
+├── docs/                        # 📚 Study aids (reference material)
+│   ├── study-guide.md           # Roadmap, objectives & self-check questions
+│   ├── glossary.md              # Every key term in one line
+│   ├── cheatsheet.md            # Formulas, tensor shapes, quick reference
+│   └── references.md            # Authoritative papers, courses & videos
 ├── src/                         # PyTorch implementation
 │   ├── embeddings.py            # Embedding layers
 │   ├── attention.py             # Attention mechanisms
@@ -41,6 +46,15 @@ transformer-playground/
 └── data/                        # Training data
     └── sample_text.txt          # Shakespeare sample
 ```
+
+## 📚 Study Aids
+
+Alongside the notebooks, the [`docs/`](docs/) folder has supplementary reference material:
+
+- [**Study Guide**](docs/study-guide.md) — prerequisites, the learning arc, per-notebook objectives, and self-check questions.
+- [**Glossary**](docs/glossary.md) — one-line definitions for every key term, mapped to the notebook that teaches it.
+- [**Cheat Sheet**](docs/cheatsheet.md) — formulas, tensor shapes, decoding params, and the 2017→modern component map.
+- [**References**](docs/references.md) — authoritative papers, blogs, courses, and videos, organized by topic.
 
 ## Getting Started
 
