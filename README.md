@@ -36,7 +36,10 @@ transformer-playground/
 │   ├── study-guide.md           # Roadmap, objectives & self-check questions
 │   ├── glossary.md              # Every key term in one line
 │   ├── cheatsheet.md            # Formulas, tensor shapes, quick reference
-│   └── references.md            # Authoritative papers, courses & videos
+│   ├── references.md            # Authoritative papers, courses & videos
+│   ├── references-zh.md         # 中文学习资料 (Chinese-language resources)
+│   ├── diagrams.md              # 📊 Mermaid flowcharts + generated figures
+│   └── images/                  # Generated PNGs (+ generate.py)
 ├── src/                         # PyTorch implementation
 │   ├── embeddings.py            # Embedding layers
 │   ├── attention.py             # Attention mechanisms
@@ -55,6 +58,8 @@ Alongside the notebooks, the [`docs/`](docs/) folder has supplementary reference
 - [**Glossary**](docs/glossary.md) — one-line definitions for every key term, mapped to the notebook that teaches it.
 - [**Cheat Sheet**](docs/cheatsheet.md) — formulas, tensor shapes, decoding params, and the 2017→modern component map.
 - [**References**](docs/references.md) — authoritative papers, blogs, courses, and videos, organized by topic.
+- [**References (中文)**](docs/references-zh.md) — 中文学习资料：李沐论文精读、李宏毅课程、动手学深度学习、苏剑林博客、Datawhale 教程等。
+- [**Diagrams**](docs/diagrams.md) — visual companion: Mermaid flowcharts for every stage (attention, blocks, training, RLHF/DPO) plus generated figures.
 
 ## Getting Started
 
@@ -121,23 +126,34 @@ today's LLMs. Notebooks 12–13 cover **post-training**: how a raw base model be
 helpful, aligned assistant through instruction tuning (SFT + LoRA) and preference
 alignment (reward models, RLHF, DPO).
 
+## The Learning Journey at a Glance
+
+```mermaid
+flowchart LR
+    A[01–07<br/>Build a GPT<br/>from scratch] --> B[08–11<br/>Training, inference,<br/>BERT/seq2seq, modern stack] --> C[12–13<br/>Post-training:<br/>SFT, LoRA, RLHF, DPO]
+```
+
+See [**docs/diagrams.md**](docs/diagrams.md) for the full set of flowcharts (attention,
+Transformer blocks, the training loop, decoding, RLHF/DPO) and generated figures.
+
 ## The Key Insight
 
-Traditional sequence models (RNNs) process tokens one at a time:
+Traditional sequence models (RNNs) process tokens one at a time; Transformers let every
+token look at every other token simultaneously — that's **Self-Attention**, the mechanism
+you'll implement from scratch.
 
+```mermaid
+flowchart TB
+    subgraph RNN["RNN — sequential, slow, forgets early tokens"]
+        t1[Token1] --> t2[Token2] --> t3[Token3] --> t4[TokenN]
+    end
+    subgraph TF["Transformer — parallel, long-range memory"]
+        s1((Token1)) <--> s2((Token2)) <--> s3((Token3)) <--> s4((TokenN))
+        s1 <--> s3
+        s1 <--> s4
+        s2 <--> s4
+    end
 ```
-Token1 → Token2 → Token3 → ... → TokenN
-         (slow, forgets early tokens)
-```
-
-Transformers let every token look at every other token simultaneously:
-
-```
-Token1 ←→ Token2 ←→ Token3 ←→ ... ←→ TokenN
-              (fast, long-range memory)
-```
-
-This is achieved through **Self-Attention** - the mechanism you'll implement from scratch!
 
 ## Requirements
 
