@@ -3,6 +3,8 @@
 Curated, authoritative sources — original papers, official blogs, and established
 courses — organized by topic. arXiv IDs verified. Start with the ⭐ items in each section.
 
+> 中文读者：另见 [**references-zh.md**](references-zh.md) — 中文学习资料（视频课程、博客、开源教程）。
+
 ---
 
 ## 0. The best overviews (read these first)

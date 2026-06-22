@@ -10,6 +10,7 @@ keep open beside them.
 | [**glossary.md**](glossary.md) | Look up any term in one line — embeddings, attention, RoPE, KV cache, RLHF, DPO… with a pointer to the notebook that teaches it. |
 | [**cheatsheet.md**](cheatsheet.md) | Grab the formula or tensor shape fast: attention, normalization, optimizers, decoding, LoRA, DPO, plus the 2017→modern component map. |
 | [**references.md**](references.md) | Go to the source. Authoritative papers, blog posts, courses, and videos, organized by topic and mapped to each notebook. |
+| [**references-zh.md**](references-zh.md) | 中文参考资料 — Chinese-language resources (李沐论文精读、李宏毅课程、动手学深度学习、苏剑林博客等), same topic structure, mapped to each notebook. |
 
 ## How to use these
 
