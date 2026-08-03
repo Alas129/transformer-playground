@@ -140,8 +140,33 @@ class DecoderBlock(nn.Module):
         normed = self.norm2(x)
         ffn_output = self.ffn(normed)
         x = x + self.dropout2(ffn_output)
-        
+
         return x, attention_weights
+
+    def forward_cached(self, x, past_kv=None):
+        """
+        Same as forward(), reusing cached keys and values.
+
+        Only attention needs the cache. The feed-forward network is applied
+        per position independently, so it has nothing to remember.
+
+        Args:
+            x: (batch, seq_len, d_model) -- the new tokens only
+            past_kv: Optional (past_k, past_v) for this block
+
+        Returns:
+            output: (batch, seq_len, d_model)
+            present: (k, v) for the next call
+        """
+        normed = self.norm1(x)
+        attn_output, present = self.attention.forward_cached(normed, past_kv)
+        x = x + self.dropout1(attn_output)
+
+        normed = self.norm2(x)
+        ffn_output = self.ffn(normed)
+        x = x + self.dropout2(ffn_output)
+
+        return x, present
 
 
 class TransformerEncoder(nn.Module):
@@ -223,12 +248,35 @@ class TransformerDecoder(nn.Module):
             all_attention_weights: List of attention weights from each layer
         """
         all_attention_weights = []
-        
+
         for layer in self.layers:
             x, attention_weights = layer(x)
             all_attention_weights.append(attention_weights)
-        
+
         x = self.norm(x)
-        
+
         return x, all_attention_weights
+
+    def forward_cached(self, x, past_kvs=None):
+        """
+        Same as forward(), reusing a per-layer KV cache.
+
+        Args:
+            x: (batch, seq_len, d_model) -- the new tokens only
+            past_kvs: Optional list of per-layer (k, v), one entry per layer
+
+        Returns:
+            output: (batch, seq_len, d_model)
+            presents: List of per-layer (k, v) for the next call
+        """
+        presents = []
+
+        for i, layer in enumerate(self.layers):
+            past_kv = None if past_kvs is None else past_kvs[i]
+            x, present = layer.forward_cached(x, past_kv)
+            presents.append(present)
+
+        x = self.norm(x)
+
+        return x, presents
 
