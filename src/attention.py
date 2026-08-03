@@ -176,3 +176,53 @@ class CausalSelfAttention(nn.Module):
         mask = self.mask[:, :, :seq_len, :seq_len]
         return self.attention(x, x, x, mask)
 
+    def forward_cached(self, x, past_kv=None):
+        """
+        Same math as forward(), but reusing cached keys and values.
+
+        This is the KV cache from notebook 09. During generation, the keys and
+        values of every earlier token are identical on every step -- they depend
+        only on that token, not on what came after. Recomputing them is pure
+        waste. Cache them, and generating token t costs O(t) attention work
+        instead of O(t^2) for the whole prefix.
+
+        Args:
+            x: (batch, seq_len, d_model). Just the *new* tokens; seq_len is 1
+                after the first call.
+            past_kv: Optional (past_k, past_v), each
+                (batch, num_heads, past_len, d_k)
+
+        Returns:
+            output: (batch, seq_len, d_model)
+            present: (k, v) including the new tokens, to pass in next time
+        """
+        mha = self.attention
+        batch_size, seq_len, _ = x.shape
+
+        # Project only the new tokens. This is the whole saving.
+        Q = mha.split_heads(mha.W_q(x), batch_size)
+        K = mha.split_heads(mha.W_k(x), batch_size)
+        V = mha.split_heads(mha.W_v(x), batch_size)
+
+        if past_kv is not None:
+            K = torch.cat([past_kv[0], K], dim=2)
+            V = torch.cat([past_kv[1], V], dim=2)
+
+        present = (K, V)
+        total = K.size(2)
+
+        assert total <= self.mask.size(-1), (
+            f"cached length {total} exceeds max_seq_len {self.mask.size(-1)}"
+        )
+
+        # Query i sits at absolute position total - seq_len + i, so it takes
+        # rows [total - seq_len, total) of the same triangular mask forward()
+        # uses. For the usual seq_len == 1 decode step that is a single row of
+        # all ones: the newest token may attend to everything, itself included.
+        mask = self.mask[:, :, total - seq_len:total, :total]
+
+        attn_output, attention_weights = mha.attention(Q, K, V, mask)
+        output = mha.combine_heads(attn_output, batch_size)
+
+        return mha.W_o(output), present
+
