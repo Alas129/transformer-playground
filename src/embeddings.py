@@ -75,15 +75,18 @@ class PositionalEncoding(nn.Module):
         pe = pe.unsqueeze(0)  # (1, max_seq_len, embed_dim)
         self.register_buffer('pe', pe)
     
-    def forward(self, x):
+    def forward(self, x, offset=0):
         """
         Args:
             x: Embeddings (batch_size, seq_len, embed_dim)
+            offset: Absolute position of the first token in x. Non-zero only
+                during cached generation, where x holds just the newest token
+                but its true position is len(cache).
         Returns:
             Embeddings + positional encoding
         """
         seq_len = x.size(1)
-        x = x + self.pe[:, :seq_len, :]
+        x = x + self.pe[:, offset:offset + seq_len, :]
         return self.dropout(x)
 
 
@@ -103,15 +106,20 @@ class LearnablePositionalEncoding(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
         self.position_embedding = nn.Embedding(max_seq_len, embed_dim)
     
-    def forward(self, x):
+    def forward(self, x, offset=0):
         """
         Args:
             x: Embeddings (batch_size, seq_len, embed_dim)
+            offset: Absolute position of the first token in x. Non-zero only
+                during cached generation, where x holds just the newest token
+                but its true position is len(cache).
         Returns:
             Embeddings + positional encoding
         """
         seq_len = x.size(1)
-        positions = torch.arange(seq_len, device=x.device).unsqueeze(0)
+        positions = torch.arange(
+            offset, offset + seq_len, device=x.device
+        ).unsqueeze(0)
         x = x + self.position_embedding(positions)
         return self.dropout(x)
 
@@ -143,12 +151,14 @@ class TransformerEmbedding(nn.Module):
                 embed_dim, max_seq_len, dropout
             )
     
-    def forward(self, x):
+    def forward(self, x, offset=0):
         """
         Args:
             x: Token indices (batch_size, seq_len)
+            offset: Absolute position of the first token (see the positional
+                encoding classes). Used by cached generation.
         Returns:
             Embeddings (batch_size, seq_len, embed_dim)
         """
-        return self.position_encoding(self.token_embedding(x))
+        return self.position_encoding(self.token_embedding(x), offset)
 
