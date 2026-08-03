@@ -110,47 +110,102 @@ class GPT(nn.Module):
             )
         
         return logits, loss
-    
+
+    def forward_cached(self, input_ids, past_kvs=None):
+        """
+        Forward pass reusing a KV cache (notebook 09).
+
+        Args:
+            input_ids: Token indices (batch_size, seq_len). Only the *new*
+                tokens; seq_len is 1 after the first call.
+            past_kvs: Optional list of per-layer (k, v) from a previous call
+
+        Returns:
+            logits: (batch_size, seq_len, vocab_size)
+            presents: List of per-layer (k, v) for the next call
+        """
+        past_len = 0 if past_kvs is None else past_kvs[0][0].size(2)
+
+        total = past_len + input_ids.size(1)
+        assert total <= self.max_seq_len, (
+            f"cached sequence length {total} exceeds max_seq_len "
+            f"{self.max_seq_len}. This model uses a learned absolute position "
+            f"embedding, so there is no position {self.max_seq_len} to look up. "
+            f"Use generate(), which falls back to recomputation here."
+        )
+
+        # Positions are absolute here, so the embedding needs the offset. This
+        # is exactly what makes the cache fragile for a model with a learned
+        # absolute position table -- see the note in generate().
+        x = self.embedding(input_ids, offset=past_len)
+
+        x, presents = self.decoder.forward_cached(x, past_kvs)
+        logits = self.lm_head(x)
+
+        return logits, presents
+
     @torch.no_grad()
-    def generate(self, input_ids, max_new_tokens, temperature=1.0, top_k=None):
+    def generate(self, input_ids, max_new_tokens, temperature=1.0, top_k=None,
+                 use_cache=True):
         """
         Generate text autoregressively.
-        
+
         Args:
             input_ids: Starting token indices (batch_size, seq_len)
             max_new_tokens: Number of new tokens to generate
             temperature: Sampling temperature (higher = more random)
             top_k: If set, only sample from top k most likely tokens
-        
+            use_cache: Reuse cached keys and values instead of recomputing the
+                whole prefix each step. Numerically identical (verified in
+                tests/test_kv_cache.py) and much faster. Set False to get the
+                naive path for comparison or benchmarking.
+
         Returns:
             Generated token indices (batch_size, seq_len + max_new_tokens)
         """
         self.eval()
-        
+
+        past_kvs = None
+        cache_usable = use_cache
+
         for _ in range(max_new_tokens):
-            # Crop to max sequence length if needed
-            input_crop = input_ids[:, -self.max_seq_len:]
-            
-            # Get predictions
-            logits, _ = self(input_crop)
-            
+            # This model uses a *learned absolute* position embedding, so once
+            # the sequence outgrows max_seq_len the naive path crops it and
+            # every remaining token is re-indexed from 0. A cache holds keys
+            # built at the old positions, so it cannot survive that shift --
+            # drop it and fall back to recomputing.
+            #
+            # Models with relative position (RoPE) have no such problem, which
+            # is one more reason the field moved to it. Compare
+            # ModernGPT.generate in modern.py, which caches all the way.
+            if cache_usable and input_ids.size(1) > self.max_seq_len:
+                cache_usable = False
+                past_kvs = None
+
+            if cache_usable:
+                # First pass sees the whole prompt; later passes just one token.
+                model_input = input_ids if past_kvs is None else input_ids[:, -1:]
+                logits, past_kvs = self.forward_cached(model_input, past_kvs)
+            else:
+                logits, _ = self(input_ids[:, -self.max_seq_len:])
+
             # Get logits for the last position
             logits = logits[:, -1, :] / temperature
-            
+
             # Optional: top-k sampling
             if top_k is not None:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = float('-inf')
-            
+                logits = logits.masked_fill(logits < v[:, [-1]], float('-inf'))
+
             # Convert to probabilities
             probs = F.softmax(logits, dim=-1)
-            
+
             # Sample next token
             next_token = torch.multinomial(probs, num_samples=1)
-            
+
             # Append to sequence
             input_ids = torch.cat([input_ids, next_token], dim=1)
-        
+
         return input_ids
     
     def count_parameters(self):
