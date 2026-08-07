@@ -1,50 +1,62 @@
-# 图解与流水线 (Diagrams & Pipelines)
+# Diagrams & Pipelines
 
-A visual companion to the notebooks. The **Mermaid** diagrams render automatically on
-GitHub; the **PNG** figures (in [`images/`](images/)) are generated from real math by
-[`images/generate.py`](images/generate.py) — re-run `python3 docs/images/generate.py` to rebuild them.
+A visual companion to the notebooks. The **Mermaid** diagrams render automatically on GitHub; the
+**PNG** figures (in [`images/`](images/)) are generated from real math by
+[`images/generate.py`](images/generate.py) — re-run `python3 docs/images/generate.py` to rebuild
+them.
 
-> 中文说明穿插在每节里。流程图说明「数据怎么流」，PNG 展示「真实的数值长什么样」。
+> Flowcharts show *how data flows*; the PNGs show *what the real numbers look like*.
 
 ---
 
-## 0. 学习路径总览 (The whole journey)
+## 0. The whole journey
 
 ```mermaid
 flowchart TD
-    subgraph FROM_SCRATCH["从零搭一个 GPT (NB 01–07)"]
-        A[01 演进史<br/>RNN → Transformer] --> B[02 词嵌入 + 位置编码]
-        B --> C[03 自注意力]
-        C --> D[04 多头注意力]
-        D --> E[05 Transformer Block]
-        E --> F[06 完整架构]
-        F --> G[07 训练并生成文本]
+    subgraph TRUNK["Build a GPT (NB 01–13)"]
+        A[01 Evolution<br/>RNN → Transformer] --> B[02 Embeddings + position]
+        B --> C[03 Self-attention]
+        C --> D[04 Multi-head attention]
+        D --> E[05 Transformer block]
+        E --> F[06 Full architecture]
+        F --> G[07 Train & generate]
+        G --> H[08–11 Training, inference,<br/>BERT/seq2seq, modern stack]
+        H --> I[12–13 SFT, LoRA, RLHF, DPO]
     end
-    subgraph COMPLETE["补全全貌 (NB 08–11)"]
-        H[08 训练深入<br/>loss / 调度 / 微调]
-        I[09 推理与解码<br/>采样 + KV cache]
-        J[10 编码器 & seq2seq<br/>BERT / T5]
-        K[11 现代架构<br/>RMSNorm / RoPE / GQA]
+    subgraph TA["Track A · Model core (NB 14–20)"]
+        A1[14 Tokenization] --> A2[15 Long context]
+        A2 --> A3[16 Attention variants]
+        A3 --> A4[17 Mixture-of-Experts]
+        A4 --> A5[18 Reasoning & test-time]
+        A5 --> A6[19 Efficiency]
+        A6 --> A7[20 Multimodal]
     end
-    subgraph POST["后训练对齐 (NB 12–13)"]
-        L[12 指令微调 + LoRA<br/>SFT]
-        M[13 偏好对齐<br/>RLHF / DPO]
+    subgraph TB["Track B · Systems (NB 21–23)"]
+        B1[21 Performance<br/>first principles] --> B2[22 Distributed training]
+        B1 --> B3[23 Inference serving]
     end
-    G --> H --> I --> J --> K --> L --> M
+    subgraph TC["Track C · Applications (NB 24–26)"]
+        C1[24 RAG] --> C2[25 Agents]
+        C2 --> C3[26 Production]
+    end
+    I --> A1
+    A7 --> B1
+    B3 --> C1
 ```
 
 ---
 
-## 1. 为什么需要 Transformer (NB 01)
+## 1. Why Transformers (NB 01)
 
-RNN 顺序处理、难并行、长距离遗忘；Transformer 让每个 token 一次性看到所有 token。
+RNNs process sequentially — hard to parallelize, and they forget across long distances. A
+Transformer lets every token see every other token at once.
 
 ```mermaid
 flowchart LR
-    subgraph RNN["RNN — 顺序、慢、健忘"]
+    subgraph RNN["RNN — sequential, slow, forgetful"]
         t1[Token1] --> t2[Token2] --> t3[Token3] --> t4[TokenN]
     end
-    subgraph TF["Transformer — 并行、全局可见"]
+    subgraph TF["Transformer — parallel, globally visible"]
         s1((Token1)) <--> s2((Token2))
         s2 <--> s3((Token3))
         s1 <--> s3
@@ -56,195 +68,376 @@ flowchart LR
 
 ---
 
-## 2. 文本 → 张量 (NB 02)
+## 2. Text → tensor (NB 02, 14)
 
 ```mermaid
 flowchart LR
-    txt["原始文本<br/>'The cat sat'"] --> tok["分词器<br/>tokenizer"]
-    tok --> ids["token id<br/>[3, 41, 270]"]
-    ids --> emb["词嵌入查表<br/>(vocab × d_model)"]
+    txt["raw text<br/>'The cat sat'"] --> tok["tokenizer<br/>(BPE, NB 14)"]
+    tok --> ids["token ids<br/>[3, 41, 270]"]
+    ids --> emb["token embedding lookup<br/>(vocab × d_model)"]
     emb --> add(("➕"))
-    pos["位置编码<br/>sin / cos"] --> add
-    add --> out["输入张量<br/>(seq_len × d_model)"]
+    pos["positional encoding<br/>sin / cos or RoPE"] --> add
+    add --> out["input tensor<br/>(seq_len × d_model)"]
 ```
 
-正弦位置编码的真实数值（每行一个位置，每列一个维度）：
+The real values of sinusoidal positional encoding (one row per position, one column per dimension):
 
 ![Sinusoidal positional encoding](images/positional_encoding.png)
 
 ---
 
-## 3. 自注意力的计算流程 (NB 03)
+## 3. Self-attention (NB 03)
 
 ```mermaid
 flowchart TD
-    X["输入 X<br/>(seq × d)"] --> Q["Q = X·Wq"]
+    X["input X<br/>(seq × d)"] --> Q["Q = X·Wq"]
     X --> K["K = X·Wk"]
     X --> V["V = X·Wv"]
     Q --> S["scores = Q·Kᵀ / √dₖ"]
     K --> S
-    S --> M["+ 因果掩码<br/>(屏蔽未来 token)"]
-    M --> SM["softmax<br/>(每行和=1)"]
-    SM --> O["输出 = 权重 · V"]
+    S --> M["+ causal mask<br/>(block future tokens)"]
+    M --> SM["softmax<br/>(each row sums to 1)"]
+    SM --> O["output = weights · V"]
     V --> O
 ```
 
-在一个玩具句子上算出的**真实**因果注意力权重——下三角，且每行归一化到 1：
+Real causal attention weights on a toy sentence — lower-triangular, each row normalized to 1:
 
 ![Causal self-attention weights](images/attention_weights.png)
 
 ---
 
-## 4. 多头注意力 (NB 04)
+## 4. Multi-head attention (NB 04)
 
 ```mermaid
 flowchart LR
-    X[输入] --> H1[head 1]
+    X[input] --> H1[head 1]
     X --> H2[head 2]
     X --> H3[head ...]
     X --> H4[head h]
-    H1 --> C[拼接 concat]
+    H1 --> C[concat]
     H2 --> C
     H3 --> C
     H4 --> C
-    C --> P[线性投影 Wo]
-    P --> Y[输出]
+    C --> P[linear projection Wo]
+    P --> Y[output]
 ```
 
-每个头在不同子空间里学不同的关系（语法、指代、位置…），拼接后再投影回 `d_model`。
+Each head learns different relationships (syntax, coreference, position) in its own subspace; the
+results are concatenated and projected back to `d_model`.
 
 ---
 
-## 5. Transformer Block (NB 05)
+## 5. Transformer block (NB 05)
 
 ```mermaid
 flowchart TD
-    in[输入] --> ln1[LayerNorm]
-    ln1 --> mha[多头自注意力]
-    mha --> r1(("➕ 残差"))
+    in[input] --> ln1[LayerNorm]
+    ln1 --> mha[multi-head self-attention]
+    mha --> r1(("➕ residual"))
     in --> r1
     r1 --> ln2[LayerNorm]
-    ln2 --> ff["前馈网络<br/>(Linear → GELU → Linear)"]
-    ff --> r2(("➕ 残差"))
+    ln2 --> ff["feed-forward<br/>(Linear → GELU → Linear)"]
+    ff --> r2(("➕ residual"))
     r1 --> r2
-    r2 --> out[输出]
+    r2 --> out[output]
 ```
 
-残差连接 + 归一化让深层网络可训练；这个 block 堆叠 N 次就是模型主体。
+Residual connections plus normalization make deep networks trainable; stack this block N times to
+form the model body.
 
 ---
 
-## 6. 完整 Decoder-only GPT (NB 06)
+## 6. Decoder-only GPT (NB 06)
 
 ```mermaid
 flowchart TD
-    tok[token ids] --> emb[词嵌入 + 位置编码]
-    emb --> b1[Transformer Block × 1]
-    b1 --> b2[Transformer Block × 2]
+    tok[token ids] --> emb[token + positional embedding]
+    emb --> b1[Transformer block × 1]
+    b1 --> b2[Transformer block × 2]
     b2 --> bn[... × N]
-    bn --> lnf[最终 LayerNorm]
-    lnf --> head["输出头<br/>(d_model → vocab)"]
+    bn --> lnf[final LayerNorm]
+    lnf --> head["LM head<br/>(d_model → vocab)"]
     head --> logits[logits]
-    logits --> sm["softmax → 下一个 token 概率"]
+    logits --> sm["softmax → next-token probabilities"]
 ```
 
 ---
 
-## 7. 训练流水线 (NB 07–08)
+## 7. Training pipeline (NB 07–08)
 
 ```mermaid
 flowchart LR
-    data[语料] --> batch[切分 batch + 滑窗]
-    batch --> fwd[前向: 预测下一个 token]
-    fwd --> loss["交叉熵 loss<br/>(perplexity = exp(loss))"]
-    loss --> bwd[反向传播]
-    bwd --> opt["优化器 AdamW<br/>+ LR 调度 + 梯度裁剪"]
+    data[corpus] --> batch[batch + sliding window]
+    batch --> fwd[forward: predict next token]
+    fwd --> loss["cross-entropy loss<br/>(perplexity = exp(loss))"]
+    loss --> bwd[backpropagation]
+    bwd --> opt["AdamW optimizer<br/>+ LR schedule + grad clip"]
     opt --> fwd
-    opt -. 周期性 .-> val[验证集评估]
+    opt -. periodic .-> val[validation]
 ```
 
-训练用的**学习率调度**（线性 warmup + 余弦衰减，精确公式）：
+The training **learning-rate schedule** (linear warmup + cosine decay, exact formula):
 
 ![LR warmup + cosine decay](images/lr_schedule.png)
 
 ---
 
-## 8. 推理与解码 (NB 09)
+## 8. Inference & decoding (NB 09)
 
 ```mermaid
 flowchart TD
-    p[prompt] --> f[前向得到 logits]
-    f --> dec{解码策略}
-    dec -->|greedy| g[取 argmax]
-    dec -->|top-k| tk[只在前 k 个里采样]
-    dec -->|top-p| tp[nucleus: 累积概率 p]
-    dec -->|beam| bm[束搜索保留 b 条路径]
-    g --> nxt[追加 token]
+    p[prompt] --> f[forward → logits]
+    f --> dec{decoding strategy}
+    dec -->|greedy| g[argmax]
+    dec -->|top-k| tk[sample from top k]
+    dec -->|top-p| tp[nucleus: cumulative prob p]
+    dec -->|beam| bm[keep b running sequences]
+    g --> nxt[append token]
     tk --> nxt
     tp --> nxt
     bm --> nxt
-    nxt -->|未结束| f
-    nxt -->|EOS / 达到长度| done[输出文本]
+    nxt -->|not finished| f
+    nxt -->|EOS / max length| done[output text]
 ```
 
-**KV cache**：自回归生成时缓存历史 token 的 K/V，每步只算新 token，避免重复计算。
+**KV cache**: during autoregressive generation, cache the keys/values of past tokens so each step
+computes only the new token, avoiding recomputation.
 
 ---
 
-## 9. 架构家族 (NB 10)
+## 9. Architecture families (NB 10)
 
 ```mermaid
 flowchart LR
     subgraph DEC["Decoder-only (GPT)"]
-        d[因果注意力<br/>生成]
+        d[causal attention<br/>generation]
     end
     subgraph ENC["Encoder-only (BERT)"]
-        e[双向注意力<br/>理解 / MLM]
+        e[bidirectional attention<br/>understanding / MLM]
     end
     subgraph S2S["Encoder-Decoder (T5)"]
-        en[编码器] --> cross[交叉注意力] --> de[解码器]
+        en[encoder] --> cross[cross-attention] --> de[decoder]
     end
 ```
 
 ---
 
-## 10. 现代 LLM 组件 (NB 11)
+## 10. Modern LLM components (NB 11)
 
 ```mermaid
 flowchart TD
-    subgraph V2017["2017 原版"]
-        a1[LayerNorm] --- a2[绝对位置编码] --- a3[MHA] --- a4[FFN + ReLU]
+    subgraph V2017["2017 original"]
+        a1[LayerNorm] --- a2[absolute position] --- a3[MHA] --- a4[FFN + ReLU]
     end
-    subgraph MODERN["现代 (LLaMA 风格)"]
-        b1[RMSNorm] --- b2[RoPE 旋转位置编码] --- b3[GQA 分组查询注意力] --- b4[SwiGLU]
+    subgraph MODERN["modern (LLaMA-style)"]
+        b1[RMSNorm] --- b2[RoPE rotary position] --- b3[GQA grouped-query] --- b4[SwiGLU]
     end
-    a1 -.升级.-> b1
-    a2 -.升级.-> b2
-    a3 -.升级.-> b3
-    a4 -.升级.-> b4
+    a1 -.upgrade.-> b1
+    a2 -.upgrade.-> b2
+    a3 -.upgrade.-> b3
+    a4 -.upgrade.-> b4
 ```
 
-外加 **FlashAttention**：不改数学结果，只优化显存读写，让长序列训练更快更省。
+Plus **FlashAttention**: same mathematical result, IO-aware kernel — faster and more memory-frugal
+on long sequences.
 
 ---
 
-## 11. 后训练：从 base 模型到对齐助手 (NB 12–13)
+## 11. Post-training: base model → aligned assistant (NB 12–13)
 
 ```mermaid
 flowchart LR
-    base["预训练 base 模型<br/>(只会续写)"] --> sft["SFT 指令微调<br/>(指令-回答对, 可用 LoRA)"]
-    sft --> rm["训练奖励模型<br/>(人类偏好排序)"]
-    rm --> rlhf["RLHF (PPO)<br/>用奖励信号优化策略"]
-    sft --> dpo["DPO<br/>直接用偏好对优化, 无需 RL"]
-    rlhf --> aligned["对齐的助手模型"]
+    base["pretrained base model<br/>(only continues text)"] --> sft["SFT instruction tuning<br/>(instruction-response pairs, LoRA optional)"]
+    sft --> rm["train reward model<br/>(human preference ranking)"]
+    rm --> rlhf["RLHF (PPO)<br/>optimize policy against reward"]
+    sft --> dpo["DPO<br/>direct preference, no RL"]
+    rlhf --> aligned["aligned assistant"]
     dpo --> aligned
 ```
 
-- **SFT**：教模型「按指令回答」，配合 **LoRA** 只训练少量低秩参数，省显存。
-- **RLHF**：训练奖励模型 → 用 PPO 强化学习对齐人类偏好（InstructGPT 路线）。
-- **DPO**：跳过奖励模型和 RL，直接用「优于/劣于」的偏好对做对比损失，更简单稳定。
+---
+
+## 12. Tokenization: BPE training (NB 14)
+
+```mermaid
+flowchart TD
+    text[training corpus] --> pre["pre-tokenize<br/>(regex, keep word boundaries)"]
+    pre --> bytes["encode to UTF-8 bytes<br/>(256 base symbols, no UNK)"]
+    bytes --> count["count adjacent pairs"]
+    count --> merge["merge most frequent pair<br/>→ new token"]
+    merge --> record["record merge in order"]
+    record -->|repeat until vocab size| count
+    record --> done["merge table<br/>(applied in order at encode time)"]
+```
 
 ---
 
-> 想改图？Mermaid 直接编辑本文件即可；PNG 改 [`images/generate.py`](images/generate.py) 后重跑。
-> 配套文字解释见各 notebook 与 [`study-guide.md`](study-guide.md)。
+## 13. Long context: RoPE scaling (NB 15)
+
+```mermaid
+flowchart TD
+    train["train at length L_train"] --> break["evaluate past L_train<br/>→ perplexity explodes"]
+    break --> diag["diagnosis: low-frequency<br/>RoPE bands reach unseen angles"]
+    diag --> fix{scaling method}
+    fix -->|PI| pi["divide all positions by s"]
+    fix -->|NTK| ntk["raise the base<br/>(slow bands more)"]
+    fix -->|YaRN| yarn["per-band ramp<br/>+ attention temperature"]
+    fix -->|ALiBi| alibi["linear distance bias<br/>(no rotation)"]
+```
+
+---
+
+## 14. Attention variants: the state/recall trade-off (NB 16)
+
+```mermaid
+flowchart LR
+    subgraph FULL["Softmax attention"]
+        f1["unbounded state<br/>(every token kept)"] --> f2["perfect recall<br/>quadratic cost"]
+    end
+    subgraph LIN["Linear attention / SSM"]
+        l1["fixed matrix state"] --> l2["lossy recall<br/>linear cost"]
+    end
+    subgraph HYB["Hybrid (the answer)"]
+        h1["mostly recurrent layers"] --> h2["a few attention layers<br/>for exact retrieval"]
+    end
+```
+
+---
+
+## 15. Mixture-of-Experts routing (NB 17)
+
+```mermaid
+flowchart TD
+    tok[token] --> router[router: score experts]
+    router --> topk["top-k selection<br/>(+ load-balancing)"]
+    topk --> e1[expert 1]
+    topk --> e3[expert 3]
+    e1 --> combine["weighted combine<br/>(gate weights)"]
+    e3 --> combine
+    tok -.->|residual| combine
+    combine --> out[output]
+    router -.->|bias update| router
+```
+
+---
+
+## 16. Reasoning & test-time compute (NB 18)
+
+```mermaid
+flowchart LR
+    q[question] --> cot["chain of thought<br/>(rent serial steps)"]
+    cot --> samples["sample N chains"]
+    samples --> verify{selection}
+    verify -->|majority| sc[self-consistency]
+    verify -->|verifier| bon["best-of-N<br/>(ORM / PRM)"]
+    bon --> rl["RLVR / GRPO<br/>train on verified success"]
+    sc --> ans[answer]
+    bon --> ans
+    rl -.->|improves| cot
+```
+
+---
+
+## 17. Performance first principles (NB 21)
+
+```mermaid
+flowchart TD
+    hw["machine balance<br/>= FLOP/s ÷ bytes/s"] --> ai["arithmetic intensity<br/>= FLOPs ÷ bytes moved"]
+    ai --> cmp{intensity vs balance}
+    cmp -->|prefill: ≈2T, high| pc["COMPUTE-bound<br/>→ faster math"]
+    cmp -->|decode: ≈2B, low| mb["MEMORY-bound<br/>→ fewer bytes, bigger batch"]
+    mb --> opt["batching · GQA/MLA ·<br/>quantization · speculation"]
+    pc --> opt2["FlashAttention ·<br/>quantized compute"]
+```
+
+---
+
+## 18. Distributed training (NB 22)
+
+```mermaid
+flowchart TD
+    wall["memory wall:<br/>18 bytes/param"] --> split{parallelism}
+    split -->|batch| dp["DP / ZeRO<br/>gradients, per step<br/>→ across nodes"]
+    split -->|matmul| tp["TP<br/>activations, 2×/layer<br/>→ intra-node NVLink"]
+    split -->|layers| pp["PP<br/>boundary activations<br/>→ across nodes"]
+    split -->|experts| ep["EP<br/>all-to-all tokens<br/>→ intra-node"]
+    dp --> combine["3D composition:<br/>match frequency to link speed"]
+    tp --> combine
+    pp --> combine
+    ep --> combine
+```
+
+---
+
+## 19. Inference serving (NB 23)
+
+```mermaid
+flowchart LR
+    req[requests] --> cb["continuous batching<br/>(retire + admit per step)"]
+    cb --> paged["PagedAttention<br/>(block table, no fragmentation)"]
+    paged --> prefix["prefix cache<br/>(share KV across requests)"]
+    prefix --> chunk["chunked prefill<br/>(mix with decode)"]
+    chunk --> spec["speculative decoding<br/>(draft + verify, exact)"]
+    spec --> out[tokens]
+```
+
+---
+
+## 20. RAG pipeline (NB 24)
+
+```mermaid
+flowchart LR
+    docs[documents] --> chunk[chunk<br/>sentence-aware]
+    chunk --> embed[embed<br/>bi-encoder]
+    embed --> index[(vector index)]
+    q[query] --> retrieve{retrieve}
+    index --> retrieve
+    q --> bm25[BM25 sparse]
+    retrieve --> fuse["RRF fusion<br/>(dense + sparse)"]
+    bm25 --> fuse
+    fuse --> rerank["rerank<br/>cross-encoder"]
+    rerank --> assemble["assemble context<br/>(best first/last)"]
+    assemble --> gen[generate + cite]
+```
+
+---
+
+## 21. Agent loop (NB 25)
+
+```mermaid
+flowchart TD
+    task[task] --> think["Thought<br/>(reason / plan)"]
+    think --> decide{answer or act?}
+    decide -->|act| action["Action<br/>(structured tool call)"]
+    action --> harness["harness executes tool<br/>(NOT the model)"]
+    harness --> obs["Observation<br/>(result → context)"]
+    obs --> think
+    decide -->|answer| done[final answer]
+    harness -.->|guardrails,<br/>least privilege| action
+```
+
+---
+
+## 22. Production system (NB 26)
+
+```mermaid
+flowchart TD
+    req[request] --> guard1[input guardrails]
+    guard1 --> route{router / cascade}
+    route -->|easy| small[small model]
+    route -->|hard| large[large model]
+    small --> cache[caching layers]
+    large --> cache
+    cache --> serve["serving<br/>(paged KV, continuous batch)"]
+    serve --> guard2[output guardrails]
+    guard2 --> resp[response]
+    resp -.->|trace| obs[observability]
+    resp -.->|sample| eval["evaluation<br/>(offline + online)"]
+```
+
+---
+
+> To edit a flowchart, change the Mermaid directly in this file. To change a PNG, edit
+> [`images/generate.py`](images/generate.py) and re-run it. Prose explanations live in each
+> notebook and in [`study-guide.md`](study-guide.md).
