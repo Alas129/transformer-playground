@@ -98,6 +98,126 @@ courses — organized by topic. arXiv IDs verified. Start with the ⭐ items in 
 
 ---
 
+# Track A — Model core
+
+## 12. Tokenization (NB 14)
+
+- ⭐ Sennrich et al., 2015 — **BPE for NLP** — [arXiv:1508.07909](https://arxiv.org/abs/1508.07909).
+- Kudo & Richardson, 2018 — **SentencePiece** — [arXiv:1808.06226](https://arxiv.org/abs/1808.06226) · Kudo, 2018 — [Subword Regularization (Unigram)](https://arxiv.org/abs/1804.10959).
+- Radford et al., 2019 — **GPT-2** (byte-level BPE, §2.2) — [PDF](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf).
+- Land & Bartolo, 2024 — Fishing for Magikarp (under-trained tokens) — [arXiv:2405.05417](https://arxiv.org/abs/2405.05417).
+- Pagnoni et al., 2024 — Byte Latent Transformer — [arXiv:2412.09871](https://arxiv.org/abs/2412.09871).
+
+## 13. Long context (NB 15)
+
+- ⭐ Peng et al., 2023 — **YaRN** — [arXiv:2309.00071](https://arxiv.org/abs/2309.00071).
+- Chen et al., 2023 — Position Interpolation — [arXiv:2306.15595](https://arxiv.org/abs/2306.15595).
+- Press et al., 2021 — **ALiBi** — [arXiv:2108.12409](https://arxiv.org/abs/2108.12409).
+- Xiao et al., 2023 — **Attention sinks / StreamingLLM** — [arXiv:2309.17453](https://arxiv.org/abs/2309.17453).
+- ⭐ Hsieh et al., 2024 — **RULER** (real vs advertised context) — [arXiv:2404.06654](https://arxiv.org/abs/2404.06654).
+- Liu et al., 2023 — Lost in the Middle — [arXiv:2307.03172](https://arxiv.org/abs/2307.03172).
+
+## 14. Attention variants (NB 16)
+
+- ⭐ DeepSeek-AI, 2024 — **DeepSeek-V2 (MLA)** — [arXiv:2405.04434](https://arxiv.org/abs/2405.04434).
+- Katharopoulos et al., 2020 — **Transformers are RNNs** (linear attention) — [arXiv:2006.16236](https://arxiv.org/abs/2006.16236).
+- ⭐ Gu & Dao, 2023 — **Mamba** — [arXiv:2312.00752](https://arxiv.org/abs/2312.00752) · Dao & Gu, 2024 — [Mamba-2 / SSMs are Transformers](https://arxiv.org/abs/2405.21060).
+- Lieber et al., 2024 — Jamba (hybrid) — [arXiv:2403.19887](https://arxiv.org/abs/2403.19887).
+- Arora et al., 2023 — Zoology (associative recall) — [arXiv:2312.04927](https://arxiv.org/abs/2312.04927).
+
+## 15. Mixture-of-Experts (NB 17)
+
+- Fedus et al., 2021 — **Switch Transformers** (aux loss) — [arXiv:2101.03961](https://arxiv.org/abs/2101.03961).
+- Zoph et al., 2022 — ST-MoE (z-loss, stability) — [arXiv:2202.08906](https://arxiv.org/abs/2202.08906).
+- Dai et al., 2024 — DeepSeekMoE (fine-grained + shared) — [arXiv:2401.06066](https://arxiv.org/abs/2401.06066).
+- ⭐ Wang et al., 2024 — **Loss-Free Load Balancing** — [arXiv:2408.15664](https://arxiv.org/abs/2408.15664).
+- Komatsuzaki et al., 2022 — Sparse Upcycling — [arXiv:2212.05055](https://arxiv.org/abs/2212.05055).
+
+## 16. Reasoning & test-time compute (NB 18)
+
+- Wei et al., 2022 — **Chain-of-Thought** — [arXiv:2201.11903](https://arxiv.org/abs/2201.11903).
+- Wang et al., 2022 — Self-Consistency — [arXiv:2203.11171](https://arxiv.org/abs/2203.11171).
+- Lightman et al., 2023 — Let's Verify Step by Step (PRM) — [arXiv:2305.20050](https://arxiv.org/abs/2305.20050).
+- ⭐ Shao et al., 2024 — **DeepSeekMath (GRPO)** — [arXiv:2402.03300](https://arxiv.org/abs/2402.03300).
+- ⭐ DeepSeek-AI, 2025 — **DeepSeek-R1** (RLVR) — [arXiv:2501.12948](https://arxiv.org/abs/2501.12948).
+- Snell et al., 2024 — Scaling Test-Time Compute Optimally — [arXiv:2408.03314](https://arxiv.org/abs/2408.03314).
+- Turpin et al., 2023 — CoT unfaithfulness — [arXiv:2305.04388](https://arxiv.org/abs/2305.04388).
+
+## 17. Efficiency: quantization, distillation, pruning (NB 19)
+
+- Dettmers et al., 2022 — LLM.int8() (the outlier discovery) — [arXiv:2208.07339](https://arxiv.org/abs/2208.07339).
+- ⭐ Xiao et al., 2022 — **SmoothQuant** — [arXiv:2211.10438](https://arxiv.org/abs/2211.10438).
+- Frantar et al., 2022 — GPTQ — [arXiv:2210.17323](https://arxiv.org/abs/2210.17323) · Lin et al., 2023 — [AWQ](https://arxiv.org/abs/2306.00978).
+- Hinton et al., 2015 — Distilling the Knowledge — [arXiv:1503.02531](https://arxiv.org/abs/1503.02531) · Agarwal et al., 2023 — [On-Policy Distillation](https://arxiv.org/abs/2306.13649).
+- Frantar & Alistarh, 2023 — SparseGPT — [arXiv:2301.00774](https://arxiv.org/abs/2301.00774).
+
+## 18. Multimodal (NB 20)
+
+- ⭐ Dosovitskiy et al., 2020 — **ViT** — [arXiv:2010.11929](https://arxiv.org/abs/2010.11929).
+- ⭐ Radford et al., 2021 — **CLIP** — [arXiv:2103.00020](https://arxiv.org/abs/2103.00020).
+- Liu et al., 2023 — LLaVA — [arXiv:2304.08485](https://arxiv.org/abs/2304.08485) · [LLaVA-1.5](https://arxiv.org/abs/2310.03744).
+- Alayrac et al., 2022 — Flamingo (cross-attention) — [arXiv:2204.14198](https://arxiv.org/abs/2204.14198).
+- Radford et al., 2022 — Whisper — [arXiv:2212.04356](https://arxiv.org/abs/2212.04356) · Peebles & Xie, 2022 — [DiT](https://arxiv.org/abs/2212.09748).
+
+See also [**variants-atlas.md**](variants-atlas.md) for Transformers beyond text.
+
+---
+
+# Track B — Systems
+
+## 19. Performance first principles (NB 21)
+
+- ⭐ Pope et al., 2022 — **Efficiently Scaling Transformer Inference** — [arXiv:2211.05102](https://arxiv.org/abs/2211.05102). The definitive treatment.
+- Williams et al., 2009 — Roofline model — [ACM](https://dl.acm.org/doi/10.1145/1498765.1498785).
+- Chowdhery et al., 2022 — PaLM (introduces MFU) — [arXiv:2204.02311](https://arxiv.org/abs/2204.02311).
+- Databricks — [LLM Inference Performance Engineering](https://www.databricks.com/blog/llm-inference-performance-engineering-best-practices) (MBU).
+
+## 20. Distributed training (NB 22)
+
+- ⭐ Rajbhandari et al., 2019 — **ZeRO** — [arXiv:1910.02054](https://arxiv.org/abs/1910.02054) · Zhao et al., 2023 — [PyTorch FSDP](https://arxiv.org/abs/2304.11277).
+- ⭐ Shoeybi et al., 2019 — **Megatron-LM (tensor parallelism)** — [arXiv:1909.08053](https://arxiv.org/abs/1909.08053).
+- Narayanan et al., 2021 — 3D parallelism, 1F1B — [arXiv:2104.04473](https://arxiv.org/abs/2104.04473) · Huang et al., 2018 — [GPipe](https://arxiv.org/abs/1811.06965).
+- Korthikanti et al., 2022 — Sequence parallelism + selective recompute — [arXiv:2205.05198](https://arxiv.org/abs/2205.05198).
+- Liu et al., 2023 — Ring Attention — [arXiv:2310.01889](https://arxiv.org/abs/2310.01889).
+- Grattafiori et al., 2024 — The Llama 3 Herd (§3.3: real config, failure stats) — [arXiv:2407.21783](https://arxiv.org/abs/2407.21783).
+
+## 21. Inference serving (NB 23)
+
+- ⭐ Kwon et al., 2023 — **PagedAttention / vLLM** — [arXiv:2309.06180](https://arxiv.org/abs/2309.06180).
+- Yu et al., 2022 — Orca (continuous batching) — [OSDI](https://www.usenix.org/conference/osdi22/presentation/yu).
+- Zheng et al., 2023 — SGLang / RadixAttention — [arXiv:2312.07104](https://arxiv.org/abs/2312.07104).
+- ⭐ Leviathan et al., 2022 — **Speculative decoding** — [arXiv:2211.17192](https://arxiv.org/abs/2211.17192) · Chen et al., 2023 — [Speculative sampling](https://arxiv.org/abs/2302.01318).
+- Agrawal et al., 2024 — Sarathi-Serve (chunked prefill) — [arXiv:2403.02310](https://arxiv.org/abs/2403.02310) · Zhong et al., 2024 — [DistServe (disaggregation)](https://arxiv.org/abs/2401.09670).
+
+---
+
+# Track C — Applications
+
+## 22. RAG (NB 24)
+
+- ⭐ Lewis et al., 2020 — **RAG** — [arXiv:2005.11401](https://arxiv.org/abs/2005.11401).
+- Robertson & Zaragoza, 2009 — BM25 and Beyond — [journal](https://dl.acm.org/doi/10.1561/1500000019) · Karpukhin et al., 2020 — [Dense Passage Retrieval](https://arxiv.org/abs/2004.04906).
+- Reimers & Gurevych, 2019 — Sentence-BERT — [arXiv:1908.10084](https://arxiv.org/abs/1908.10084) · Cormack et al., 2009 — [RRF](https://dl.acm.org/doi/10.1145/1571941.1572114).
+- Gao et al., 2022 — HyDE — [arXiv:2212.10496](https://arxiv.org/abs/2212.10496) · Edge et al., 2024 — [GraphRAG](https://arxiv.org/abs/2404.16130).
+- Es et al., 2023 — RAGAS (evaluation) — [arXiv:2309.15217](https://arxiv.org/abs/2309.15217).
+
+## 23. Agents (NB 25)
+
+- ⭐ Anthropic, 2024 — **Building Effective Agents** — [blog](https://www.anthropic.com/research/building-effective-agents).
+- ⭐ Yao et al., 2022 — **ReAct** — [arXiv:2210.03629](https://arxiv.org/abs/2210.03629) · Shinn et al., 2023 — [Reflexion](https://arxiv.org/abs/2303.11366).
+- Anthropic, 2024 — [Model Context Protocol](https://modelcontextprotocol.io) · Anthropic, 2025 — [Multi-agent research system](https://www.anthropic.com/engineering/built-multi-agent-research-system).
+- Greshake et al., 2023 — Indirect prompt injection — [arXiv:2302.12173](https://arxiv.org/abs/2302.12173).
+- Jimenez et al., 2023 — SWE-bench — [arXiv:2310.06770](https://arxiv.org/abs/2310.06770) · Yao et al., 2024 — [τ-bench](https://arxiv.org/abs/2406.12045).
+
+## 24. Production (NB 26)
+
+- ⭐ Sheng et al., 2023 — **S-LoRA** — [arXiv:2311.03285](https://arxiv.org/abs/2311.03285).
+- Chen et al., 2023 — FrugalGPT (cascades) — [arXiv:2305.05176](https://arxiv.org/abs/2305.05176).
+- Zheng et al., 2023 — Judging LLM-as-a-Judge (MT-Bench) — [arXiv:2306.05685](https://arxiv.org/abs/2306.05685).
+- Google SRE — [Service Level Objectives](https://sre.google/sre-book/service-level-objectives/).
+
+---
+
 ## Quick map: notebook → must-read
 
 | NB | Topic | Start here |
@@ -112,3 +232,16 @@ courses — organized by topic. arXiv IDs verified. Start with the ⭐ items in 
 | 11 | Modern architectures | LLaMA; RoPE; RMSNorm; SwiGLU; GQA; FlashAttention |
 | 12 | SFT & LoRA | InstructGPT; LoRA; QLoRA |
 | 13 | Alignment | InstructGPT; DPO; PPO; Constitutional AI |
+| 14 | Tokenization | Sennrich (BPE); Karpathy tokenizer video |
+| 15 | Long context | YaRN; ALiBi; RULER |
+| 16 | Attention variants | DeepSeek-V2 (MLA); Mamba; Zoology |
+| 17 | Mixture-of-Experts | Switch; DeepSeekMoE; Loss-Free Balancing |
+| 18 | Reasoning | Chain-of-Thought; GRPO (DeepSeekMath); DeepSeek-R1 |
+| 19 | Efficiency | SmoothQuant; GPTQ/AWQ; On-Policy Distillation |
+| 20 | Multimodal | ViT; CLIP; LLaVA |
+| 21 | Performance | Pope et al. (Efficiently Scaling Inference); Roofline |
+| 22 | Distributed training | ZeRO; Megatron-LM; Llama 3 Herd §3.3 |
+| 23 | Serving | PagedAttention (vLLM); Speculative Decoding |
+| 24 | RAG | Lewis (RAG); BM25 and Beyond; RRF |
+| 25 | Agents | Building Effective Agents; ReAct |
+| 26 | Production | S-LoRA; FrugalGPT; LLM-as-a-Judge |

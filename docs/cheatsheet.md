@@ -121,11 +121,140 @@ $$\mathcal{L}_{DPO} = -\log\sigma\!\Big(\beta\big[(\log\pi_\theta(y_w|x)-\log\pi
 
 ---
 
-## This repo's model configs (`src/gpt.py`)
+## This repo's model configs
 
-| | `d_model` | heads | layers | `d_ff` | block size |
-|---|---|---|---|---|---|
-| `create_gpt_small` | 128 | 4 | 4 | 512 | 256 |
-| `create_gpt_medium` | 256 | 8 | 6 | 1024 | 256 |
+| | `d_model` | heads | kv_heads | layers | `d_ff` | block size |
+|---|---|---|---|---|---|---|
+| `create_gpt_small` (`gpt.py`) | 128 | 4 | 4 | 4 | 512 | 256 |
+| `create_gpt_medium` (`gpt.py`) | 256 | 8 | 8 | 6 | 1024 | 256 |
+| `create_modern_small` (`modern.py`) | 128 | 4 | 2 | 4 | ~352 | 256 |
 
-`d_ff = 4·d_model`. Default optimizer: AdamW, LR `3e-4`, cosine schedule, grad clip `1.0`.
+`d_ff = 4·d_model` (2017) or `≈(8/3)·d_model` for SwiGLU. Default optimizer: AdamW, LR `3e-4`,
+cosine schedule, grad clip `1.0`.
+
+---
+
+# Track A — Model core (NB 14–20)
+
+## Tokenization (NB 14)
+
+- **BPE**: count adjacent pairs → merge most frequent → record → repeat. Apply merges in
+  **training order** at encode time.
+- **Byte-level** base vocab = 256 → no `UNK` possible. Contrast `CharTokenizer`, which drops
+  unseen chars.
+- Trade-off: compression **saturates** with vocab size; embedding cost grows **linearly**. Real
+  vocabs 32k–200k, growing for multilingual fertility.
+
+## Long context (NB 15)
+
+RoPE angle `= pos · inv_freq[i]`, unbounded in `pos` → low-frequency bands break first.
+
+| Method | Change | Best for |
+|---|---|---|
+| PI | `pos → pos/s` (all bands) | pure long-range retrieval |
+| NTK | `base → base·s^(d/(d−2))` (slow bands more) | balanced |
+| YaRN | per-band ramp + attn temp `1/(0.1·ln s + 1)` | language modeling |
+| ALiBi | `−m_h·(i−j)` bias, no rotation | extrapolation by construction |
+
+**Attention sink**: never evict position 0. **KV cache** `= 2·L·n_kv·d_k·T·B·bytes` — the real
+long-context limit.
+
+## Attention variants (NB 16)
+
+Quadratic crossover: attention FLOPs overtake projections at `T = 2·d_model`.
+
+| Scheme | Cache/token (per layer) |
+|---|---|
+| MHA | `2·h·d_k` |
+| GQA (g:1) | `2·(h/g)·d_k` |
+| MQA | `2·d_k` |
+| **MLA** | `d_c + rope_dim` (≈57× < MHA at V2 scale) |
+
+**Linear attention**: `softmax(QK)V → φ(Q)(φ(K)ᵀV)` = O(N) = RNN with matrix state. Recurrence
+`S_i = S_{i-1} + φ(k_i)v_iᵀ`. **Mamba** makes `Δ,B,C` input-dependent (selective). **Hybrids** add
+a few attention layers for exact recall.
+
+## Mixture-of-Experts (NB 17)
+
+Total params scale with `E`; active FLOPs with `top_k`. Per-block: `12d²` attn + `E·(2·d_ff·d)` FFN.
+
+- **Aux loss**: `L_aux = E·Σ f_i·P_i` (1.0 at balance). Competes with the task.
+- **Loss-free bias**: `b_i −= γ·sign(load_i − 1/E)`, on **selection only** (DeepSeek-V3).
+- **Router z-loss**: `mean(logsumexp(logits)²)` keeps the softmax unsaturated.
+- **Capacity** `= factor·top_k·N/E`; overflow tokens dropped to the residual.
+
+## Reasoning & test-time compute (NB 18)
+
+- CoT rents serial steps a fixed-depth pass cannot do internally.
+- **GRPO advantage**: $A_i = (r_i − \text{mean}(r))/(\text{std}(r) + \epsilon)$ — no value network.
+- **GRPO loss**: $-\mathbb{E}[\min(\rho_i A_i, \text{clip}(\rho_i, 1{-}\epsilon, 1{+}\epsilon)A_i)] + \beta\,\text{KL}(\pi_\theta \| \pi_{ref})$
+- All-equal-reward group → zero advantage → zero gradient. Filter degenerate groups.
+- **RLHF** (preference, reward model) vs **RLVR** (correctness, automatic checker).
+
+## Efficiency (NB 19)
+
+Quantize: `scale = max|x|/qmax; q = round(x/scale); x' = q·scale`. Keep `scale` small → per-group.
+
+- **Range beat precision**: BF16 (8-bit exp) beat FP16 (5-bit, overflows at 65504).
+- **SmoothQuant**: `X → X/s`, `W → sW` (exact) migrates activation outliers into weights.
+- **Distillation**: `L = T²·KL(softmax(teacher/T) ‖ softmax(student/T))`. On-policy > off-policy.
+- int8 ≈ free, int4 cheap with small groups, <3-bit collapses. Larger models quantize better.
+
+## Multimodal (NB 20)
+
+- ViT: image → patches → 1 linear layer = tokens. A 224×224 image at patch 16 = 196 tokens.
+- CLIP loss (symmetric InfoNCE): $\tfrac12[\text{CE}(sZ, I) + \text{CE}(sZ^\top, I)]$, `s` learned.
+- VLM: ViT patches → MLP → prepend to LLM tokens (LLaVA); or cross-attention (Flamingo); or early
+  fusion (Chameleon).
+
+---
+
+# Track B — Systems (NB 21–23)
+
+## Performance first principles (NB 21)
+
+- **Machine balance** `= peak FLOP/s ÷ peak bytes/s` (~300 FLOP/byte on an H100).
+- **Arithmetic intensity** `= FLOPs ÷ bytes moved`. `> balance` → compute-bound; `<` → memory-bound.
+- **Prefill** intensity `≈ 2T` (compute-bound); **decode** `≈ 2B` (memory-bound until batch ~300).
+- Params `≈ 12Ld²`; forward `≈ 2NP`; **training `≈ 6NP`** (2 fwd + 4 bwd).
+- Training memory: **16–18 bytes/param** (weights 2 + grad 2 + AdamW 8 + master 4). Optimizer state
+  dominates.
+
+## Distributed training (NB 22)
+
+- **all-reduce** `= 2S(N−1)/N` `=` reduce-scatter + all-gather.
+- **ZeRO**: shard optimizer(1) → +grad(2) → +param(3, FSDP). Stages 1–2 nearly free.
+- **TP** MLP: column-parallel then row-parallel → 1 all-reduce. Intra-node only.
+- **Pipeline bubble** `= (P−1)/(M+P−1)`; need `M ≫ P`.
+- Placement by frequency: TP (2×/layer) intra-node; DP (1×/step) inter-node.
+
+## Inference serving (NB 23)
+
+- **Continuous batching**: retire + admit per iteration.
+- **PagedAttention**: fixed KV blocks + block table; fragmentation ≤ 1 block/seq.
+- **Speculative** expected tokens/pass `= (1 − p^{k+1})/(1 − p)`; exact via rejection sampling.
+- Preemption: **recompute** (fast) over swap (slow PCIe).
+
+---
+
+# Track C — Applications (NB 24–26)
+
+## RAG (NB 24)
+
+- **BM25**: `Σ IDF(t)·tf·(k1+1) / (tf + k1(1 − b + b·|d|/avgdl))`. Beats dense on exact strings.
+- **RRF**: `Σ_r 1/(k + rank_r(d))`, `k≈60`. Fuses sparse + dense, no score normalization.
+- **Cascade**: retrieve N (bi-encoder) → rerank top-N (cross-encoder) → keep few.
+- **recall@k** bounds the whole system. Measure it first, separately from generation.
+
+## Agents (NB 25)
+
+- Ladder: prompt → chain → route → parallelize → orchestrate → **agent**. Prefer the lowest rung.
+- Tool loop: model emits call → **harness** executes → result to context → repeat.
+- Prompt injection: unsolved. Defend architecturally (least privilege, human-in-loop, sandbox).
+
+## Production (NB 26)
+
+- **SLOs at p95/p99**, never the mean.
+- **S-LoRA**: shared base + stacked adapters, mixed in one batch. Base matmul dominates → throughput preserved.
+- **Cascade routing** dominates any single tier on the cost/quality frontier.
+- **LLM judge**: randomize position, pairwise compare, calibrate vs humans (κ > 0.6).
