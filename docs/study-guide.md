@@ -99,6 +99,79 @@ You understand a notebook when you can answer its questions **without looking**.
 
 ---
 
+## Track A — Model core (14–20)
+
+The frontier model-level knowledge the 2017 paper did not have. Runs on CPU with only
+`requirements.txt`.
+
+### 14 — Tokenization
+- *Goal:* Build byte-level BPE and understand what tokenization breaks.
+- *Self-check:* Why does byte-level BPE have no `UNK`? Why apply merges in training order? Why do models miscount letters and struggle with arithmetic?
+
+### 15 — Long Context
+- *Goal:* Why models break past their training length, and the four fixes.
+- *Self-check:* Which RoPE frequency bands break first, and why? How does NTK differ from PI? Why does evicting position 0 collapse a sliding window? Why is the KV cache the real limit?
+
+### 16 — Attention Variants
+- *Goal:* MLA, linear attention, SSMs, and why hybrids win.
+- *Self-check:* What does MLA cache, and why is it smaller than MQA's? Show that causal linear attention is a recurrence. What breaks if an SSM's `Δ,B,C` are fixed? Why does one attention layer in eight recover most of the recall?
+
+### 17 — Mixture-of-Experts
+- *Goal:* Decouple capacity from compute; make routing work.
+- *Self-check:* `topk` has no gradient — how does the router learn? Why is collapse self-reinforcing? Why does loss-free balancing beat an auxiliary loss? Why is sparsity per-token but not per-batch?
+
+### 18 — Reasoning & Test-Time Compute
+- *Goal:* CoT, verifiers, RLVR, and GRPO from scratch.
+- *Self-check:* Why can't a small model solve a k-step problem in one pass, regardless of width? What does GRPO replace, and what does it save? What does RLVR give up in exchange for needing no reward model? Is a CoT trace an explanation?
+
+### 19 — Efficiency
+- *Goal:* Quantization, distillation, pruning.
+- *Self-check:* Why did BF16 beat FP16 despite fewer mantissa bits? Why are activations harder to quantize than weights? What does SmoothQuant migrate, and why is the matmul unchanged? Why did unstructured pruning lose to quantization on GPUs?
+
+### 20 — Multimodal
+- *Goal:* ViT, CLIP, and how vision attaches to an LLM.
+- *Self-check:* Why is a strided conv identical to per-patch linear projection? What inductive bias does ViT lack? Where do CLIP's negatives come from? Which parameters train in LLaVA stage 1?
+
+---
+
+## Track B — Systems (21–23)
+
+How the model is trained across thousands of GPUs and served to thousands of users. NB 21 is the
+foundation — read it before 22 or 23. Track B's cells are mostly analytical and run in seconds.
+
+### 21 — Performance First Principles
+- *Goal:* Derive that prefill is compute-bound and decode is memory-bound.
+- *Self-check:* Why is a matrix-vector product memory-bound but a matrix-matrix product not? At what batch size does decode become compute-bound? Why is training `6ND`? Why does the KV cache cap throughput?
+
+### 22 — Distributed Training
+- *Goal:* The five parallelism strategies and how to choose.
+- *Self-check:* Why is optimizer state the memory problem, not weights? Why must the TP MLP be column-then-row? Why must TP stay intra-node while DP can cross the datacenter? Compute the pipeline bubble for 8 stages and 16 micro-batches.
+
+### 23 — Inference Serving
+- *Goal:* PagedAttention, continuous batching, speculative decoding.
+- *Self-check:* Why does static batching waste so much? What is the max fragmentation per sequence under PagedAttention? Prove speculative decoding samples from the target distribution. Why prefer recompute over swap on preemption?
+
+---
+
+## Track C — Applications (24–26)
+
+Turning the model into a product. Some cells use optional libraries (`sentence-transformers`,
+`faiss`) and degrade gracefully without them.
+
+### 24 — RAG
+- *Goal:* Build the full retrieval pipeline from scratch.
+- *Self-check:* When is fine-tuning the wrong tool for knowledge? Why does RRF fuse ranks not scores? What can a cross-encoder do that a bi-encoder cannot? How do you tell whether retrieval or generation failed?
+
+### 25 — Agents
+- *Goal:* Tool use, ReAct, memory, context engineering, safety.
+- *Self-check:* What distinguishes a workflow from an agent, and why prefer a workflow? In the tool loop, what executes the tool? When does multi-agent beat single-agent? Why can't a model separate instructions from data?
+
+### 26 — Production
+- *Goal:* SLOs, multi-tenant serving, evaluation, safety, cost.
+- *Self-check:* Why state SLOs at p99 not the mean? How does S-LoRA make multi-tenant serving economical? Why is a semantic cache's threshold a correctness concern? What are the three LLM-judge biases and how do you counter position bias?
+
+---
+
 ## Capstone: explain the whole pipeline
 
 If you can narrate this end-to-end, you've reached expert-level understanding:
