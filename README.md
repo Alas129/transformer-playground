@@ -135,8 +135,9 @@ After going through the notebooks, train your own text generator:
 ```python
 from src.train import train_gpt, generate_text
 
-# train_gpt returns the trained model AND the fitted tokenizer
-model, tokenizer = train_gpt('data/sample_text.txt', epochs=50)
+# train_gpt returns the trained model, the fitted tokenizer, and the
+# per-epoch train/val loss history
+model, tokenizer, history = train_gpt('data/sample_text.txt', epochs=50)
 
 # generate_text handles encoding the prompt and decoding the output
 print(generate_text(model, tokenizer, "To be or not to be", max_tokens=100))

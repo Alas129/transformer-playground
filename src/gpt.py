@@ -32,11 +32,15 @@ class GPT(nn.Module):
             dropout: Dropout rate (default: 0.1)
         """
         super().__init__()
-        
+
         self.vocab_size = vocab_size
         self.d_model = d_model
         self.max_seq_len = max_seq_len
-        
+        self.num_heads = num_heads
+        self.num_layers = num_layers
+        self.d_ff = d_ff
+        self.dropout = dropout
+
         # Embedding layer (token + position)
         self.embedding = TransformerEmbedding(
             vocab_size=vocab_size,
@@ -65,7 +69,8 @@ class GPT(nn.Module):
         
         # Initialize weights
         self.apply(self._init_weights)
-    
+        self._scale_residual_projections(num_layers)
+
     def _init_weights(self, module):
         """Initialize weights using small random values."""
         if isinstance(module, nn.Linear):
@@ -77,6 +82,26 @@ class GPT(nn.Module):
         elif isinstance(module, nn.LayerNorm):
             torch.nn.init.ones_(module.weight)
             torch.nn.init.zeros_(module.bias)
+
+    def _scale_residual_projections(self, num_layers):
+        """
+        Shrink the projections that write into the residual stream.
+
+        Each block adds two contributions to the stream, and with N blocks all
+        initialized at the same scale those contributions accumulate: the
+        stream's variance grows roughly linearly in depth, so a deep stack
+        starts out with much larger activations than a shallow one. Dividing
+        the two output projections by sqrt(2 * num_layers) cancels that growth
+        at init -- the GPT-2 trick.
+
+        This cannot be done inside _init_weights, because nn.Module.apply sees
+        a bare nn.Linear and cannot tell which of them feeds the residual add.
+        """
+        scale = (2 * num_layers) ** -0.5
+        for name, param in self.named_parameters():
+            if name.endswith("attention.W_o.weight") or name.endswith("linear2.weight"):
+                with torch.no_grad():
+                    param.mul_(scale)
     
     def forward(self, input_ids, targets=None):
         """
@@ -220,6 +245,30 @@ class GPT(nn.Module):
 
         return input_ids
     
+    @property
+    def config(self):
+        """
+        Every argument needed to rebuild this model.
+
+        Saved alongside the weights so a checkpoint is self-describing. Without
+        it, loading means knowing out of band which factory produced the file,
+        and guessing wrong surfaces as a wall of shape mismatches.
+        """
+        return {
+            "vocab_size": self.vocab_size,
+            "d_model": self.d_model,
+            "num_heads": self.num_heads,
+            "num_layers": self.num_layers,
+            "max_seq_len": self.max_seq_len,
+            "d_ff": self.d_ff,
+            "dropout": self.dropout,
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        """Rebuild an (untrained) model from a config dict."""
+        return cls(**config)
+
     def count_parameters(self):
         """Count total trainable parameters."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)

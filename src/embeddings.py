@@ -15,20 +15,36 @@ import math
 class TokenEmbedding(nn.Module):
     """
     Learnable token embeddings.
-    
+
     Maps token indices to dense vectors.
+
+    The `scale` flag controls the sqrt(d_model) factor from "Attention Is All
+    You Need" (S3.4). That factor is not decoration: the paper adds a *fixed*
+    sinusoidal positional encoding whose entries are of order 1, and its
+    embeddings are initialized at roughly N(0, 1/d). Multiplying by sqrt(d)
+    brings the embedding up to the same order as the positional signal so
+    neither drowns out the other.
+
+    None of that holds for a GPT-style model, which initializes at N(0, 0.02)
+    and *learns* its positions. There the factor only makes the token signal
+    ~sqrt(d) larger than the position table -- 11x at d_model=128 -- so the
+    model must spend early training undoing it. Hence the default is off, and
+    TransformerEmbedding turns it on only for the sinusoidal path.
     """
-    
-    def __init__(self, vocab_size, embed_dim):
+
+    def __init__(self, vocab_size, embed_dim, scale=False):
         """
         Args:
             vocab_size: Number of unique tokens
             embed_dim: Dimension of embedding vectors
+            scale: Multiply by sqrt(embed_dim). Only correct when pairing with
+                a fixed positional encoding of order 1 (see the class docstring)
         """
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         self.embed_dim = embed_dim
-    
+        self.scale = scale
+
     def forward(self, x):
         """
         Args:
@@ -36,8 +52,10 @@ class TokenEmbedding(nn.Module):
         Returns:
             Embeddings (batch_size, seq_len, embed_dim)
         """
-        # Scale embeddings by sqrt(d_model) as in original paper
-        return self.embedding(x) * math.sqrt(self.embed_dim)
+        out = self.embedding(x)
+        if self.scale:
+            out = out * math.sqrt(self.embed_dim)
+        return out
 
 
 class PositionalEncoding(nn.Module):
@@ -140,8 +158,14 @@ class TransformerEmbedding(nn.Module):
             learnable_pos: Use learnable (True) or sinusoidal (False) positions
         """
         super().__init__()
-        self.token_embedding = TokenEmbedding(vocab_size, embed_dim)
-        
+        # Scale the token embedding only against the fixed sinusoidal encoding,
+        # whose magnitude the model cannot adjust. A learned position table can
+        # grow into whatever scale it needs, so scaling there just starts the
+        # two signals an order of magnitude apart.
+        self.token_embedding = TokenEmbedding(
+            vocab_size, embed_dim, scale=not learnable_pos
+        )
+
         if learnable_pos:
             self.position_encoding = LearnablePositionalEncoding(
                 embed_dim, max_seq_len, dropout
