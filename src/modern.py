@@ -481,7 +481,21 @@ class ModernGPT(nn.Module):
         Returns:
             (batch, seq_len + max_new_tokens)
         """
+        # Sampling must run with dropout off, but this method is also called
+        # *during* training to print a sample. Restore whatever mode we found,
+        # or training silently continues without dropout.
+        was_training = self.training
         self.eval()
+        try:
+            return self._generate(
+                input_ids, max_new_tokens, temperature, top_k, top_p, use_cache
+            )
+        finally:
+            self.train(was_training)
+
+    def _generate(self, input_ids, max_new_tokens, temperature, top_k, top_p,
+                  use_cache):
+        """The sampling loop itself. Assumes the caller has set eval mode."""
         past_kvs = None
 
         for step in range(max_new_tokens):

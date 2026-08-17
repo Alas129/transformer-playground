@@ -163,8 +163,20 @@ class GPT(nn.Module):
         Returns:
             Generated token indices (batch_size, seq_len + max_new_tokens)
         """
+        # Sampling must run with dropout off, but this method is also called
+        # *during* training to print a sample (see train_gpt). Restore whatever
+        # mode we found, or training silently continues without dropout.
+        was_training = self.training
         self.eval()
+        try:
+            return self._generate(
+                input_ids, max_new_tokens, temperature, top_k, use_cache
+            )
+        finally:
+            self.train(was_training)
 
+    def _generate(self, input_ids, max_new_tokens, temperature, top_k, use_cache):
+        """The sampling loop itself. Assumes the caller has set eval mode."""
         past_kvs = None
         cache_usable = use_cache
 

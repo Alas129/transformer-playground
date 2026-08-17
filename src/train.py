@@ -7,10 +7,13 @@ Provides:
 - train_gpt: Main training function
 """
 
+import os
+import warnings
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-import os
 from tqdm import tqdm
 
 from .gpt import GPT, create_gpt_small
@@ -43,7 +46,22 @@ class CharTokenizer:
         self.vocab_size = len(chars)
     
     def encode(self, text):
-        """Convert text to list of integers."""
+        """
+        Convert text to list of integers.
+
+        Characters outside the vocabulary are dropped -- a character tokenizer
+        fitted on one corpus has no id to give them. Dropping them silently
+        would make the returned sequence shorter than the text the caller
+        passed, so warn instead.
+        """
+        unknown = sorted({c for c in text if c not in self.char_to_idx})
+        if unknown:
+            warnings.warn(
+                f"{len(unknown)} character(s) not in the vocabulary were "
+                f"dropped: {''.join(unknown)!r}",
+                UserWarning,
+                stacklevel=2,
+            )
         return [self.char_to_idx[c] for c in text if c in self.char_to_idx]
     
     def decode(self, indices):
@@ -71,6 +89,25 @@ class CharTokenizer:
         tokenizer.idx_to_char = {int(k): v for k, v in data['idx_to_char'].items()}
         tokenizer.vocab_size = len(tokenizer.char_to_idx)
         return tokenizer
+
+
+def tokenizer_path_for(save_path):
+    """
+    Where to write the tokenizer that belongs to a checkpoint.
+
+    Derived from the checkpoint's stem, so it never collides with the
+    checkpoint itself. A plain str.replace('.pt', ...) is not safe here: for a
+    path like 'model.bin' it matches nothing and returns the checkpoint path,
+    and the tokenizer JSON then overwrites the model that was just saved.
+
+    Args:
+        save_path: Path the model checkpoint was saved to
+
+    Returns:
+        Path (str) for the tokenizer JSON, alongside the checkpoint
+    """
+    path = Path(save_path)
+    return str(path.with_name(f"{path.stem}_tokenizer.json"))
 
 
 class TextDataset(Dataset):
@@ -210,7 +247,7 @@ def train_gpt(text_path, epochs=100, batch_size=32, seq_len=128, lr=3e-4,
             'vocab_size': tokenizer.vocab_size,
             'seq_len': seq_len,
         }, save_path)
-        tokenizer.save(save_path.replace('.pt', '_tokenizer.json'))
+        tokenizer.save(tokenizer_path_for(save_path))
         print(f"Model saved to: {save_path}")
     
     return model, tokenizer
@@ -235,20 +272,28 @@ def generate_text(model, tokenizer, prompt, max_tokens=100, temperature=0.8,
     """
     if device is None:
         device = next(model.parameters()).device
-    
-    model.eval()
-    
-    # Encode prompt
-    input_ids = torch.tensor([tokenizer.encode(prompt)], device=device)
-    
-    # Generate
+
+    # Encode prompt. An empty result would reach the model as a (1, 0) tensor
+    # and fail deep inside the embedding lookup, so catch it here where the
+    # cause is still obvious.
+    token_ids = tokenizer.encode(prompt)
+    if not token_ids:
+        raise ValueError(
+            f"prompt {prompt!r} encoded to zero tokens -- none of its "
+            f"characters are in the tokenizer's vocabulary"
+        )
+
+    input_ids = torch.tensor([token_ids], dtype=torch.long, device=device)
+
+    # generate() handles eval mode and restores it, so the caller's training
+    # state survives a mid-training sample.
     output_ids = model.generate(
-        input_ids, 
+        input_ids,
         max_new_tokens=max_tokens,
         temperature=temperature,
         top_k=top_k
     )
-    
+
     # Decode
     return tokenizer.decode(output_ids[0].tolist())
 
