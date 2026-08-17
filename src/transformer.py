@@ -17,10 +17,12 @@ from .attention import MultiHeadAttention, CausalSelfAttention
 class FeedForward(nn.Module):
     """
     Position-wise Feed-Forward Network.
-    
-    FFN(x) = max(0, xW1 + b1)W2 + b2
-    
-    In modern transformers, GELU is often used instead of ReLU.
+
+    FFN(x) = GELU(xW1 + b1)W2 + b2
+
+    The 2017 paper used ReLU -- max(0, xW1 + b1)W2 + b2 -- but GPT-2 onward
+    switched to GELU, which this implements. Modern LLMs go one step further to
+    a gated variant; see SwiGLU in modern.py and notebook 11.
     """
     
     def __init__(self, d_model, d_ff=None, dropout=0.1):

@@ -1,5 +1,7 @@
 # Transformer Learning Journey
 
+[![tests](https://github.com/Alas129/transformer-playground/actions/workflows/tests.yml/badge.svg)](https://github.com/Alas129/transformer-playground/actions/workflows/tests.yml)
+
 A hands-on guide from *"what is attention?"* to *"I can build, train, serve, and ship an LLM
 system."* Start by building a GPT from scratch; end with distributed training, production serving,
 RAG, and agents — every concept implemented from primitives and verified by running it.
@@ -109,12 +111,13 @@ Alongside the notebooks, the [`docs/`](docs/) folder has supplementary reference
 pip install -r requirements.txt
 ```
 
-All of notebooks 01–20 (the trunk and Track A) run on a CPU with only these. Some Track B/C cells
-use optional libraries — install `requirements-advanced.txt` for those, or skip them: every such
-cell degrades gracefully and prints its expected output when the library is absent.
+All 26 notebooks run on a CPU with only these. A couple of cells in notebook 24 (RAG) can
+additionally check the from-scratch retriever against real embeddings and a real vector
+index — install `requirements-advanced.txt` for those, or skip them: every such cell
+degrades gracefully and prints its expected output when the library is absent.
 
 ```bash
-pip install -r requirements-advanced.txt    # optional, for some NB 22–26 cells
+pip install -r requirements-advanced.txt    # optional, for two NB 24 cells
 pytest tests/                                # verify the src/ implementations
 ```
 
@@ -220,10 +223,10 @@ flowchart TB
 
 ## Requirements
 
-- Python 3.8+
-- NumPy, PyTorch, Matplotlib/Seaborn, Jupyter, tqdm (all in `requirements.txt`)
-- Optional for a handful of Track B/C cells: `transformers`, `datasets`, `faiss-cpu`,
-  `sentence-transformers`, `tiktoken`, `pytest` (`requirements-advanced.txt`)
+- Python 3.10+ (what CI tests; 3.8 and 3.9 are past end-of-life)
+- NumPy, PyTorch, Matplotlib, Jupyter, tqdm, pytest (all in `requirements.txt`)
+- Optional for a couple of NB 24 cells: `sentence-transformers`, `faiss-cpu`
+  (`requirements-advanced.txt`)
 
 Everything runs on a CPU. Track A notebooks execute in a few minutes each; Track B is mostly
 analytical and runs in seconds.
