@@ -1,4 +1,9 @@
 # Transformer Learning Journey - Dependencies
+#
+# Everything in notebooks 01-26 runs with only these, on a CPU.
+# A few Track B/C cells can additionally use real production libraries --
+# see requirements-advanced.txt. They are optional; those cells degrade to an
+# explanation when the library is absent.
 
 # Core computation
 numpy>=1.21.0
@@ -6,12 +11,13 @@ torch>=2.0.0
 
 # Visualization
 matplotlib>=3.5.0
-seaborn>=0.12.0
 
-# Jupyter notebooks
+# Jupyter notebooks (runtime tools, not imported by the code)
 jupyter>=1.0.0
 ipykernel>=6.0.0
 
 # Progress bars for training
 tqdm>=4.64.0
 
+# Test suite for src/ (pytest tests/)
+pytest>=8.0.0

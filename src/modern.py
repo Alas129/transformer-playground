@@ -416,6 +416,7 @@ class ModernGPT(nn.Module):
             self.lm_head.weight = self.token_embedding.weight
 
         self.apply(self._init_weights)
+        self._scale_residual_projections(num_layers)
 
     def _init_weights(self, module):
         """Initialize weights with small normal values, as in gpt.py."""
@@ -425,6 +426,18 @@ class ModernGPT(nn.Module):
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+
+    def _scale_residual_projections(self, num_layers):
+        """
+        Shrink the projections that write into the residual stream, so the
+        stream's scale at init does not grow with depth. See the equivalent
+        method in gpt.py for why this cannot live in _init_weights.
+        """
+        scale = (2 * num_layers) ** -0.5
+        for name, param in self.named_parameters():
+            if name.endswith("attn.W_o.weight") or name.endswith("w_down.weight"):
+                with torch.no_grad():
+                    param.mul_(scale)
 
     def forward(self, input_ids, targets=None, past_kvs=None, use_cache=False):
         """
@@ -481,7 +494,21 @@ class ModernGPT(nn.Module):
         Returns:
             (batch, seq_len + max_new_tokens)
         """
+        # Sampling must run with dropout off, but this method is also called
+        # *during* training to print a sample. Restore whatever mode we found,
+        # or training silently continues without dropout.
+        was_training = self.training
         self.eval()
+        try:
+            return self._generate(
+                input_ids, max_new_tokens, temperature, top_k, top_p, use_cache
+            )
+        finally:
+            self.train(was_training)
+
+    def _generate(self, input_ids, max_new_tokens, temperature, top_k, top_p,
+                  use_cache):
+        """The sampling loop itself. Assumes the caller has set eval mode."""
         past_kvs = None
 
         for step in range(max_new_tokens):

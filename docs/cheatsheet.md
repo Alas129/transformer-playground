@@ -129,8 +129,22 @@ $$\mathcal{L}_{DPO} = -\log\sigma\!\Big(\beta\big[(\log\pi_\theta(y_w|x)-\log\pi
 | `create_gpt_medium` (`gpt.py`) | 256 | 8 | 8 | 6 | 1024 | 256 |
 | `create_modern_small` (`modern.py`) | 128 | 4 | 2 | 4 | ~352 | 256 |
 
-`d_ff = 4·d_model` (2017) or `≈(8/3)·d_model` for SwiGLU. Default optimizer: AdamW, LR `3e-4`,
-cosine schedule, grad clip `1.0`.
+`d_ff = 4·d_model` (2017) or `≈(8/3)·d_model` for SwiGLU.
+
+**`train_gpt` defaults** (`src/train.py`): AdamW at LR `3e-4` with weight decay `0.1` on
+matrices only (gains and biases are excluded), 2% linear warmup then cosine decay to `0.1×`
+peak, grad clip `1.0`, contiguous 10% validation split, dataset stride `= seq_len`, seed `0`.
+
+**Two initialization details** that are easy to get wrong and easy to miss:
+
+- The `sqrt(d_model)` factor on token embeddings is **only** for the fixed sinusoidal
+  encoding, whose entries are of order 1. With a *learned* position table both sides are
+  learned, and the factor just starts the token signal `sqrt(d)` above the position signal.
+  `TokenEmbedding(..., scale=False)` is the default; `TransformerEmbedding` turns it on for
+  the sinusoidal path only.
+- Projections that **write into the residual stream** (`W_o`, the FFN's second layer) are
+  scaled by `1/sqrt(2·num_layers)` at init. Without it the residual stream's variance grows
+  with depth.
 
 ---
 

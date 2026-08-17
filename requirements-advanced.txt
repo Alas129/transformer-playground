@@ -1,27 +1,23 @@
 # Optional dependencies for a handful of Track B/C notebook cells.
 #
-# Everything in notebooks 01-20 (the trunk and all of Track A) runs with only
-# requirements.txt. A few cells in notebooks 22-26 use the libraries below to
-# compare a from-scratch implementation against production tooling.
+# Everything in notebooks 01-26 runs with only requirements.txt. The libraries
+# below back a few cells that compare a from-scratch implementation against
+# production tooling.
 #
 # You do NOT need these to read the notebooks: every optional cell is wrapped in
 # a try/except ImportError and prints its explanation plus expected output when
 # the library is absent. Install them only to run those comparisons live.
 
-# The reference LLM library (tokenizers, models) -- NB 14, 24
-transformers>=4.40.0
-datasets>=2.18.0
-
-# Real embeddings and vector search -- NB 24 (RAG)
+# Real embeddings and vector search -- NB 24 (RAG), where the notebook first
+# builds brute-force retrieval and BM25 by hand, then checks itself against
+# these.
 sentence-transformers>=2.6.0
 faiss-cpu>=1.8.0
-
-# Reference BPE tokenizers -- NB 14
-tiktoken>=0.6.0
-
-# Running the test suite
-pytest>=8.0.0
 
 # NOTE: vllm, deepspeed, and flash-attn are deliberately NOT listed. They do not
 # install on a CPU-only machine and appear in the notebooks only as reading
 # material (quoted source and architecture diagrams), never as runnable deps.
+#
+# transformers, datasets and tiktoken were listed here but nothing imports them:
+# notebook 14 builds byte-level BPE from scratch and never compares against a
+# reference tokenizer. Re-add them alongside the cell that actually uses one.

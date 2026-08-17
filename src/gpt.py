@@ -32,11 +32,15 @@ class GPT(nn.Module):
             dropout: Dropout rate (default: 0.1)
         """
         super().__init__()
-        
+
         self.vocab_size = vocab_size
         self.d_model = d_model
         self.max_seq_len = max_seq_len
-        
+        self.num_heads = num_heads
+        self.num_layers = num_layers
+        self.d_ff = d_ff
+        self.dropout = dropout
+
         # Embedding layer (token + position)
         self.embedding = TransformerEmbedding(
             vocab_size=vocab_size,
@@ -65,7 +69,8 @@ class GPT(nn.Module):
         
         # Initialize weights
         self.apply(self._init_weights)
-    
+        self._scale_residual_projections(num_layers)
+
     def _init_weights(self, module):
         """Initialize weights using small random values."""
         if isinstance(module, nn.Linear):
@@ -77,39 +82,97 @@ class GPT(nn.Module):
         elif isinstance(module, nn.LayerNorm):
             torch.nn.init.ones_(module.weight)
             torch.nn.init.zeros_(module.bias)
+
+    def _scale_residual_projections(self, num_layers):
+        """
+        Shrink the projections that write into the residual stream.
+
+        Each block adds two contributions to the stream, and with N blocks all
+        initialized at the same scale those contributions accumulate: the
+        stream's variance grows roughly linearly in depth, so a deep stack
+        starts out with much larger activations than a shallow one. Dividing
+        the two output projections by sqrt(2 * num_layers) cancels that growth
+        at init -- the GPT-2 trick.
+
+        This cannot be done inside _init_weights, because nn.Module.apply sees
+        a bare nn.Linear and cannot tell which of them feeds the residual add.
+        """
+        scale = (2 * num_layers) ** -0.5
+        for name, param in self.named_parameters():
+            if name.endswith("attention.W_o.weight") or name.endswith("linear2.weight"):
+                with torch.no_grad():
+                    param.mul_(scale)
     
     def forward(self, input_ids, targets=None):
         """
         Forward pass.
-        
+
         Args:
             input_ids: Token indices (batch_size, seq_len)
             targets: Target token indices for computing loss (batch_size, seq_len)
-        
+
         Returns:
             logits: (batch_size, seq_len, vocab_size)
             loss: Cross-entropy loss (if targets provided)
+
+        For attention maps, use attention_maps() -- this path deliberately does
+        not build them.
         """
+        seq_len = input_ids.size(1)
+        if seq_len > self.max_seq_len:
+            raise ValueError(
+                f"sequence length {seq_len} exceeds max_seq_len "
+                f"{self.max_seq_len}. This model learns an absolute position "
+                f"embedding, so there is no position {self.max_seq_len} to look "
+                f"up. Crop the input, or build the model with a larger "
+                f"max_seq_len."
+            )
+
         # Get embeddings
         x = self.embedding(input_ids)
-        
+
         # Pass through decoder
-        x, attention_weights = self.decoder(x)
-        
+        x, _ = self.decoder(x)
+
         # Project to vocabulary
         logits = self.lm_head(x)
-        
+
         # Compute loss if targets provided
         loss = None
         if targets is not None:
             # Reshape for cross entropy: (batch * seq_len, vocab_size)
+            #
+            # ignore_index=-1 skips positions labelled -1. Nothing in
+            # TextDataset produces those; it is how notebook 12 masks prompt
+            # tokens so the loss is computed on the response only. Note that
+            # PyTorch's own convention is -100 -- this repo uses -1 throughout,
+            # including in docs/glossary.md.
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)),
                 targets.view(-1),
-                ignore_index=-1  # Ignore padding
+                ignore_index=-1
             )
-        
+
         return logits, loss
+
+    @torch.no_grad()
+    def attention_maps(self, input_ids):
+        """
+        Per-layer attention weights, for visualization.
+
+        Separate from forward() so the training and inference paths never build
+        these. Each is (batch, heads, seq_len, seq_len), so a stack of them is
+        the largest thing in the model for any interesting sequence length.
+
+        Args:
+            input_ids: Token indices (batch_size, seq_len)
+
+        Returns:
+            List of (batch, heads, seq_len, seq_len), one per layer
+        """
+        x = self.embedding(input_ids)
+        _, attention_weights = self.decoder(x, return_attention=True)
+        return attention_weights
 
     def forward_cached(self, input_ids, past_kvs=None):
         """
@@ -163,8 +226,20 @@ class GPT(nn.Module):
         Returns:
             Generated token indices (batch_size, seq_len + max_new_tokens)
         """
+        # Sampling must run with dropout off, but this method is also called
+        # *during* training to print a sample (see train_gpt). Restore whatever
+        # mode we found, or training silently continues without dropout.
+        was_training = self.training
         self.eval()
+        try:
+            return self._generate(
+                input_ids, max_new_tokens, temperature, top_k, use_cache
+            )
+        finally:
+            self.train(was_training)
 
+    def _generate(self, input_ids, max_new_tokens, temperature, top_k, use_cache):
+        """The sampling loop itself. Assumes the caller has set eval mode."""
         past_kvs = None
         cache_usable = use_cache
 
@@ -208,6 +283,30 @@ class GPT(nn.Module):
 
         return input_ids
     
+    @property
+    def config(self):
+        """
+        Every argument needed to rebuild this model.
+
+        Saved alongside the weights so a checkpoint is self-describing. Without
+        it, loading means knowing out of band which factory produced the file,
+        and guessing wrong surfaces as a wall of shape mismatches.
+        """
+        return {
+            "vocab_size": self.vocab_size,
+            "d_model": self.d_model,
+            "num_heads": self.num_heads,
+            "num_layers": self.num_layers,
+            "max_seq_len": self.max_seq_len,
+            "d_ff": self.d_ff,
+            "dropout": self.dropout,
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        """Rebuild an (untrained) model from a config dict."""
+        return cls(**config)
+
     def count_parameters(self):
         """Count total trainable parameters."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)

@@ -158,10 +158,24 @@ class CausalSelfAttention(nn.Module):
         """
         super().__init__()
         self.attention = MultiHeadAttention(d_model, num_heads, dropout)
-        
-        # Create causal mask (lower triangular)
-        mask = torch.tril(torch.ones(max_seq_len, max_seq_len))
-        self.register_buffer('mask', mask.view(1, 1, max_seq_len, max_seq_len))
+
+        # Create causal mask (lower triangular).
+        #
+        # bool, not float: the mask is only ever tested for truth, so a byte per
+        # entry instead of four is free.
+        #
+        # persistent=False: this is a constant derived from max_seq_len, not
+        # something learned, so it has no business in a checkpoint. Saving it
+        # made four identical copies of a (T, T) matrix 24% of
+        # create_gpt_small's state_dict, and pinned the checkpoint to one
+        # max_seq_len -- loading it into a model with a different context length
+        # failed on buffer shape rather than anything meaningful.
+        mask = torch.tril(
+            torch.ones(max_seq_len, max_seq_len, dtype=torch.bool)
+        )
+        self.register_buffer(
+            'mask', mask.view(1, 1, max_seq_len, max_seq_len), persistent=False
+        )
     
     def forward(self, x):
         """

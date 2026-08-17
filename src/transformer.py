@@ -17,10 +17,12 @@ from .attention import MultiHeadAttention, CausalSelfAttention
 class FeedForward(nn.Module):
     """
     Position-wise Feed-Forward Network.
-    
-    FFN(x) = max(0, xW1 + b1)W2 + b2
-    
-    In modern transformers, GELU is often used instead of ReLU.
+
+    FFN(x) = GELU(xW1 + b1)W2 + b2
+
+    The 2017 paper used ReLU -- max(0, xW1 + b1)W2 + b2 -- but GPT-2 onward
+    switched to GELU, which this implements. Modern LLMs go one step further to
+    a gated variant; see SwiGLU in modern.py and notebook 11.
     """
     
     def __init__(self, d_model, d_ff=None, dropout=0.1):
@@ -192,24 +194,32 @@ class TransformerEncoder(nn.Module):
         
         self.norm = nn.LayerNorm(d_model)
     
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, return_attention=False):
         """
         Args:
             x: (batch, seq_len, d_model)
             mask: Optional attention mask
-        
+            return_attention: Collect every layer's attention matrix. Off by
+                default -- see TransformerDecoder.forward for why.
+
         Returns:
             output: (batch, seq_len, d_model)
-            all_attention_weights: List of attention weights from each layer
+            all_attention_weights: List of per-layer attention weights, or None
         """
-        all_attention_weights = []
-        
+        all_attention_weights = [] if return_attention else None
+
         for layer in self.layers:
-            x, attention_weights = layer(x, mask)
-            all_attention_weights.append(attention_weights)
-        
+            x, layer_weights = layer(x, mask)
+            if return_attention:
+                all_attention_weights.append(layer_weights)
+            # Drop the reference now. Without this the name still points at the
+            # previous layer's matrix for the whole of the next layer's forward
+            # pass, because `x, layer_weights = layer(x)` rebinds only after
+            # layer(x) returns -- so two would be alive instead of one.
+            del layer_weights
+
         x = self.norm(x)
-        
+
         return x, all_attention_weights
 
 
@@ -238,20 +248,32 @@ class TransformerDecoder(nn.Module):
         
         self.norm = nn.LayerNorm(d_model)
     
-    def forward(self, x):
+    def forward(self, x, return_attention=False):
         """
         Args:
             x: (batch, seq_len, d_model)
-        
+            return_attention: Collect every layer's attention matrix. Off by
+                default: each is (batch, heads, seq_len, seq_len), and holding
+                all of them at once is only useful for visualization. Under
+                autograd they are saved for backward regardless, so this costs
+                nothing during training -- but under no_grad the list is the
+                only thing keeping earlier layers' matrices alive, which made an
+                inference forward pass hold L of them where one would do.
+
         Returns:
             output: (batch, seq_len, d_model)
-            all_attention_weights: List of attention weights from each layer
+            all_attention_weights: List of per-layer attention weights, or None
         """
-        all_attention_weights = []
+        all_attention_weights = [] if return_attention else None
 
         for layer in self.layers:
-            x, attention_weights = layer(x)
-            all_attention_weights.append(attention_weights)
+            x, layer_weights = layer(x)
+            if return_attention:
+                all_attention_weights.append(layer_weights)
+            # See TransformerEncoder.forward: rebinding happens after the call
+            # returns, so without this the previous layer's matrix stays alive
+            # through the next layer's forward pass.
+            del layer_weights
 
         x = self.norm(x)
 
