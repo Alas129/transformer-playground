@@ -228,11 +228,12 @@ class TestBlocks:
         assert out.shape == x.shape
 
     def test_encoder_stack_returns_per_layer_weights(self, dims):
+        """Opt-in since the buffers are large; see tests/test_module_contracts.py."""
         enc = TransformerEncoder(
             dims["d_model"], dims["num_heads"], dims["num_layers"], dropout=0.0
         )
         x = torch.randn(dims["batch"], dims["seq_len"], dims["d_model"])
-        out, weights = enc(x)
+        out, weights = enc(x, return_attention=True)
         assert out.shape == x.shape
         assert len(weights) == dims["num_layers"]
 
@@ -242,7 +243,7 @@ class TestBlocks:
             dims["max_seq_len"], dropout=0.0,
         )
         x = torch.randn(dims["batch"], dims["seq_len"], dims["d_model"])
-        out, weights = dec(x)
+        out, weights = dec(x, return_attention=True)
         assert out.shape == x.shape
         assert len(weights) == dims["num_layers"]
 

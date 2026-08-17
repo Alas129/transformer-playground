@@ -106,35 +106,73 @@ class GPT(nn.Module):
     def forward(self, input_ids, targets=None):
         """
         Forward pass.
-        
+
         Args:
             input_ids: Token indices (batch_size, seq_len)
             targets: Target token indices for computing loss (batch_size, seq_len)
-        
+
         Returns:
             logits: (batch_size, seq_len, vocab_size)
             loss: Cross-entropy loss (if targets provided)
+
+        For attention maps, use attention_maps() -- this path deliberately does
+        not build them.
         """
+        seq_len = input_ids.size(1)
+        if seq_len > self.max_seq_len:
+            raise ValueError(
+                f"sequence length {seq_len} exceeds max_seq_len "
+                f"{self.max_seq_len}. This model learns an absolute position "
+                f"embedding, so there is no position {self.max_seq_len} to look "
+                f"up. Crop the input, or build the model with a larger "
+                f"max_seq_len."
+            )
+
         # Get embeddings
         x = self.embedding(input_ids)
-        
+
         # Pass through decoder
-        x, attention_weights = self.decoder(x)
-        
+        x, _ = self.decoder(x)
+
         # Project to vocabulary
         logits = self.lm_head(x)
-        
+
         # Compute loss if targets provided
         loss = None
         if targets is not None:
             # Reshape for cross entropy: (batch * seq_len, vocab_size)
+            #
+            # ignore_index=-1 skips positions labelled -1. Nothing in
+            # TextDataset produces those; it is how notebook 12 masks prompt
+            # tokens so the loss is computed on the response only. Note that
+            # PyTorch's own convention is -100 -- this repo uses -1 throughout,
+            # including in docs/glossary.md.
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)),
                 targets.view(-1),
-                ignore_index=-1  # Ignore padding
+                ignore_index=-1
             )
-        
+
         return logits, loss
+
+    @torch.no_grad()
+    def attention_maps(self, input_ids):
+        """
+        Per-layer attention weights, for visualization.
+
+        Separate from forward() so the training and inference paths never build
+        these. Each is (batch, heads, seq_len, seq_len), so a stack of them is
+        the largest thing in the model for any interesting sequence length.
+
+        Args:
+            input_ids: Token indices (batch_size, seq_len)
+
+        Returns:
+            List of (batch, heads, seq_len, seq_len), one per layer
+        """
+        x = self.embedding(input_ids)
+        _, attention_weights = self.decoder(x, return_attention=True)
+        return attention_weights
 
     def forward_cached(self, input_ids, past_kvs=None):
         """
